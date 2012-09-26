@@ -45,15 +45,12 @@ if [ "$#" = 0 ]; then
 
     # Next command lists vmids with onboot:1 set
     vmids1=$(grep onboot /etc/pve/qemu-server/*.conf | cut -d'/' -f5 | cut -d'.' -f1 | sort | uniq)
-vmids1=$'1\n2\n5'
 
     # Next command lists vmids running now
     vmids2=$(qm list | grep -Eo "^[ ]+[0-9]+" | tr -d ' ' | sort | uniq)
-vmids2=$'2\n3'
 
     # Next command lists vms with local disks
     vmids3=$(egrep "ide.*local|virtio.*local:" /etc/pve/qemu-server/*.conf | cut -d'/' -f5 | cut -d'.' -f1 | sort | uniq)
-vmids3=$'1\n5'
 
     # ( vmids1 union vmids2 )
     vmids=$(echo "$vmids1"$'\n'"$vmids2" | sort | uniq)
