@@ -1,0 +1,5 @@
+0 2 * * 1-5 ~/bin/bcdump.bash 114 115 117 118 119 120 121 122 123 124 >> ~/bin/bcdump.log 2>&1
+0 9 * * 1-5 ~/bin/bcdump_clean.bash >> ~/bin/bcdump_clean.log 2>&1
+0 * * * * logrotate ~/bin/bcdump.logrotate 
+* * * * * ~/bin/clustatWatchdog.bash >> ~/bin/clustatWatchdog.log 2>&1
+0 */6 * * * logrotate ~/bin/clustatWatchdog.logrotate

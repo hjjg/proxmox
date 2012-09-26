@@ -1,0 +1,10 @@
+"/root/bin/bcdump.log" {
+        rotate 5
+        size 500k
+}
+
+"/root/bin/bcdump_clean.log" {
+        rotate 5
+        size 500k
+}
+

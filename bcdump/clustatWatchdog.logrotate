@@ -1,0 +1,5 @@
+"/root/bin/clustatWatchdog.log" {
+        rotate 5
+        size 500k
+}
+
