@@ -10,6 +10,18 @@
 #    - dump the vm images and config together in a gzipped tar, with a .tgz.tmp name
 #    - dumping includes creating a snapshot, mounting the snapshot, running tar czf ..., unmounting the snapshot, and removing the snapshot
 #    - when dump is complete, rename the .tgz.tmp to a .tgz file
+#
+# Usage:
+#   bcdump
+#       - dump all vms that are: ( running OR set to run on boot ) AND have local disks
+#   bcdump $vmid
+#       - dump a specific vm
+#   bcdump $vmid1 $vmid2 ...
+#       - dump a few specific vms
+#
+# Limitations/assumptions:
+#   "have local disks" assumes that all disks are either ide or virtio
+#   no locks are created; this assumes that it doesn't matter... eg. the disk in LVM is assumed to match the vm config which is not part of the same atomic snapshot
 
 # hardcoded backup base directory (and /bcdump/ will be appended later)
 # This directory is not checked to make sure it is mounted; if not, it will ignorantly create a $dest/bcdump/xxxxx.tgz for each vm
@@ -17,6 +29,42 @@
 dest=/mnt/pve/bcnas1san
 
 vmids="$@"
+
+if [ "$#" = 0 ]; then
+    # if no vmids were given, then automatically select all that seem useful
+    # Wasn't sure on how to detect. Here are the ideas
+    # include:
+    # - vms currently running
+    # - vms that have run since the last backup
+    # - vms that have onboot:1 set
+    # exclude:
+    # - vms with no local disks
+    #
+    # Here is the decision for now:
+    # - union of "onboot:1 set" and "currently running"
+
+    # Next command lists vmids with onboot:1 set
+    vmids1=$(grep onboot /etc/pve/qemu-server/*.conf | cut -d'/' -f5 | cut -d'.' -f1 | sort | uniq)
+vmids1=$'1\n2\n5'
+
+    # Next command lists vmids running now
+    vmids2=$(qm list | grep -Eo "^[ ]+[0-9]+" | tr -d ' ' | sort | uniq)
+vmids2=$'2\n3'
+
+    # Next command lists vms with local disks
+    vmids3=$(egrep "ide.*local|virtio.*local:" /etc/pve/qemu-server/*.conf | cut -d'/' -f5 | cut -d'.' -f1 | sort | uniq)
+vmids3=$'1\n5'
+
+    # ( vmids1 union vmids2 )
+    vmids=$(echo "$vmids1"$'\n'"$vmids2" | sort | uniq)
+
+    # ( vmids1 union vmids2 ) intersection vmids3
+    vmids=$(comm -12 <(echo "$vmids") <(echo "$vmids3"))
+
+#    echo "auto vmids:"
+#    echo "$vmids"
+#    exit 2
+fi
 
 # if snapshot exists before anything here, give up now
 if [ -e /dev/mapper/pve-bcvmdumpsnap ]; then
