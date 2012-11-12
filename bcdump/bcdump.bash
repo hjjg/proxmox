@@ -26,7 +26,13 @@
 # hardcoded backup base directory (and /bcdump/ will be appended later)
 # This directory is not checked to make sure it is mounted; if not, it will ignorantly create a $dest/bcdump/xxxxx.tgz for each vm
 # This is an NFS share that is mounted by proxmox
+
+# TODO: this script has not been tested since modularizing these variables
 dest=/mnt/pve/bcnas1san
+lv=/dev/mapper/pve-data
+lvMountpoint=/mnt/testlv
+snap=/dev/mapper/testvg-bcvmdumpsnap
+snapMountpoint=/mnt/bcvmdumpsnap
 
 vmids="$@"
 
@@ -45,12 +51,15 @@ if [ "$#" = 0 ]; then
 
     # Next command lists vmids with onboot:1 set
     vmids1=$(grep onboot /etc/pve/qemu-server/*.conf | cut -d'/' -f5 | cut -d'.' -f1 | sort | uniq)
+#vmids1=$'1\n2\n5'
 
     # Next command lists vmids running now
     vmids2=$(qm list | grep -Eo "^[ ]+[0-9]+" | tr -d ' ' | sort | uniq)
+#vmids2=$'2\n3'
 
     # Next command lists vms with local disks
     vmids3=$(egrep "ide.*local|virtio.*local:" /etc/pve/qemu-server/*.conf | cut -d'/' -f5 | cut -d'.' -f1 | sort | uniq)
+#vmids3=$'1\n5'
 
     # ( vmids1 union vmids2 )
     vmids=$(echo "$vmids1"$'\n'"$vmids2" | sort | uniq)
@@ -64,8 +73,8 @@ if [ "$#" = 0 ]; then
 fi
 
 # if snapshot exists before anything here, give up now
-if [ -e /dev/mapper/pve-bcvmdumpsnap ]; then
-    echo "ERROR: /dev/mapper/pve-bcvmdumpsnap already exists"
+if [ -e "${snap}" ]; then
+    echo "ERROR: "${snap}" already exists"
     exit 1
 fi
 
@@ -76,9 +85,9 @@ for vmid in $vmids; do
     echo
 
     # if snapshot exists in between loops, try to remove, and give up if it fails
-    if [ -e /dev/mapper/pve-bcvmdumpsnap ]; then
+    if [ -e "${snap}" ]; then
         echo "WARNING: \"bcvmdumpsnap\" snapshot still exists... trying to remove it"
-        if lvremove -f /dev/mapper/pve-bcvmdumpsnap; then
+        if lvremove -f "${snap}"; then
             echo "Snapshot removed successfully."
         else
             echo "ERROR: snapshot removal failed... aborting backup"
@@ -117,18 +126,18 @@ for vmid in $vmids; do
     fi
 
     echo "Creating lvm snapshot"
-    lvcreate --size 4G --snapshot --name bcvmdumpsnap /dev/mapper/pve-data
-    trap "umount -l /dev/mapper/pve-bcvmdumpsnap; lvremove -f /dev/mapper/pve-bcvmdumpsnap" SIGHUP SIGINT SIGQUIT SIGABRT SIGKILL SIGALRM SIGTERM
-    lvdisplay /dev/mapper/pve-bcvmdumpsnap
+    lvcreate --size 4G --snapshot --name bcvmdumpsnap "${lv}"
+    trap "umount -l \"${snap}\"; lvremove -f \"${snap}\"" SIGHUP SIGINT SIGQUIT SIGABRT SIGKILL SIGALRM SIGTERM
+    lvdisplay "${snap}"
     
     echo "Mounting lvm snapshot"
-    mkdir -p /mnt/bcvmdumpsnap
-    mount -o ro /dev/mapper/pve-bcvmdumpsnap /mnt/bcvmdumpsnap
+    mkdir -p "${snapMountpoint}"
+    mount -o ro "${snap}" "${snapMountpoint}"
     
     echo "Making backup archive"
     date=$(date --iso-8601=second)
     mkdir -p "${dest}/bcdump"
-    tar czf "${dest}/bcdump/bcdump_${vmid}_${date}.tgz.tmp" "/etc/pve/qemu-server/${vmid}".* "/mnt/bcvmdumpsnap/images/${vmid}"
+    tar czf "${dest}/bcdump/bcdump_${vmid}_${date}.tgz.tmp" "/etc/pve/qemu-server/${vmid}".* "${snapMountpoint}/images/${vmid}"
     status=$?
     echo "Done backup; status = $status"
     if [ "$status" = 0 ]; then
@@ -137,17 +146,17 @@ for vmid in $vmids; do
     fi
     
     echo "Unounting lvm snapshot"
-    umount /dev/mapper/pve-bcvmdumpsnap
+    umount "${snap}"
     status=$?
     if [ "$status" != "0" ]; then
         echo "Unmounting failed... trying again with -l"
-        umount -l /dev/mapper/pve-bcvmdumpsnap
+        umount -l "${snap}"
     fi
-    rmdir /mnt/bcvmdumpsnap
+    rmdir "${snapMountpoint}"
     
-    lvdisplay /dev/mapper/pve-bcvmdumpsnap
+    lvdisplay "${snap}"
     echo "Removing snapshot"
-    lvremove -f /dev/mapper/pve-bcvmdumpsnap
+    lvremove -f "${snap}"
     
     echo "Done removing snapshot"
 
@@ -159,8 +168,8 @@ for vmid in $vmids; do
     lvscan
     echo
 
-    echo "lvdisplay /dev/mapper/pve-bcvmdumpsnap"
-    lvdisplay /dev/mapper/pve-bcvmdumpsnap
+    echo "lvdisplay \"${snap}\""
+    lvdisplay "${snap}"
     echo
 
 done
