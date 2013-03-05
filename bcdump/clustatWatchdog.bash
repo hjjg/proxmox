@@ -48,7 +48,7 @@ if [ "$memberStatus" != "Quorate" ]; then
     echo "==============="
     /etc/init.d/cman restart
     /etc/init.d/pve-cluster restart
-#    date +%s > "$timeFile"
+    date +%s > "$timeFile"
 else
     echo "Quorate; no action needed"
 fi
